@@ -2,12 +2,17 @@
 
 ## Tempo
 
-Duas unidades, deliberadamente distintas:
+Duas unidades dentro da sessão, deliberadamente distintas:
 
 | Unidade | Uso | Tipo |
 |---------|-----|------|
 | quadro | animação | inteiro |
 | segundo | vitais e deslocamento | float, via `relogio.dt` |
+
+Com a persistência entram mais dois relógios, que atravessam sessões: a **idade**
+do bicho (contra a qual o plugin agenda) e a **parede** (`time.time`, só para
+medir ausência). Ver [08](08-persistencia.md#os-três-relógios) — confundir os
+três é a fonte de bug mais provável dessa fase.
 
 Animação é discreta: contar quadros em inteiro é exato e não acumula erro de
 ponto flutuante. Vitais e velocidade são contínuos e se medem em segundos, o

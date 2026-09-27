@@ -5,10 +5,17 @@
 A seta significa "pode importar". Qualquer outra direção é violação.
 
 ```
+   plugins/  ──────>  api.py
+                        │
+                        v
    render/  ───────>  core/  <───────  pet/
                         ^                ^
                         └──── app.py ────┘
 ```
+
+`api.py` é a camada de cima e a única que um plugin importa. A seta de `plugins/`
+é de sentido único: o núcleo nunca importa um plugin — `carregador.py` varre a
+pasta e importa, e os decoradores de `api` só marcam a função.
 
 | Camada | Conhece | Não conhece |
 |--------|---------|-------------|
@@ -16,6 +23,8 @@ A seta significa "pode importar". Qualquer outra direção é violação.
 | `pet/` | `core/` | terminal |
 | `render/` | `core/` | regras de jogo |
 | `app.py` | todos | é a única fachada |
+| `api.py` | nada do projeto | é a única superfície que um plugin importa |
+| `carregador.py` | `api`, `core/`, `pet/` | o que um plugin faz |
 
 ### Verificação
 
@@ -31,8 +40,11 @@ simular o bicho inteiro em teste sem terminal alocado.
 
 ```
 run.py                     ponto de entrada
+plugins/                   código da jogadora, recarregado a quente
 vivarium/
 ├── app.py                 Jogo: monta as peças e roda o loop
+├── api.py                 superfície pública: cada, quando, acao, log
+├── carregador.py          descobre, importa e recarrega os plugins
 ├── core/
 │   ├── relogio.py         Relogio: tempo real -> ticks de passo fixo
 │   ├── ritmo.py           Ritmo: ciclo de (valor, duração) com relógio próprio
@@ -44,11 +56,13 @@ vivarium/
 │   ├── poses.py           Pose e os ciclos de cada movimento
 │   ├── corpo.py           compor(): pose + movimentos -> mapa de pixels
 │   ├── vitais.py          Vitais e Risco: decaimento e dano
-│   └── gato.py            Gato: posição, pose ativa, tick
+│   ├── gato.py            Gato: posição, pose ativa, tick
+│   └── acoes.py           Acao e Acoes: efeito por tecla e espera
 └── render/
     ├── paleta.py          nomes de cor
     ├── pixels.py          mapa de pixels -> células (caractere, estilo)
     ├── hud.py             corações e barras
+    ├── painel.py          painel de log
     └── tela.py            Tela: região viva via rich.live.Live
 ```
 
@@ -64,6 +78,12 @@ vivarium/
 | `corpo.py` | compor o mapa do quadro | quando compor |
 | `vitais.py` | decaimento e dano | apresentação |
 | `gato.py` | estado e escolha de pose | render |
+| `acoes.py` | efeito de cada ação e espera | ler tecla |
+| `teclado.py` | entregar a tecla pendente | o que a tecla significa |
+| `registro.py` | guardar, disparar e isolar handlers | o que um evento significa |
+| `api.py` | marcar funções e receber `log` | registrar, agendar, executar |
+| `carregador.py` | ler a pasta e traduzir marcas em inscrições | o que o handler faz |
+| `painel.py` | últimas linhas de log | de onde vem a linha |
 | `pixels.py` | meio-bloco e cor por célula | regra de jogo |
 | `tela.py` | escrever no terminal | montar conteúdo |
 
@@ -71,16 +91,20 @@ vivarium/
 
 ```
 relogio.tiques()          um tique por quadro, dorme o resto
-  gato.atualizar()
+  jogo.entrada()               tecla pendente -> acao -> efeito no pet
+  gato.atualizar()             devolve os eventos do quadro
     vitais.atualizar(pose)     decaimento por segundo, riscos e dano
     ritmos[*].atualizar()      um quadro em cada movimento
     _andar()                   x += velocidade * dt, inverte na borda
+  registro.emitir(...)         tique e os eventos devolvidos pelo gato
+  registro.vencidos(idade)     agendamentos de @cada que venceram
+  carregador.verificar()       mtime, uma vez por segundo
   app.quadro()
     grade.limpar()
     grade.estampar(gato.mapa(), x, y)
     pixels.para_celulas(grade.linhas())
     pixels.sobrepor(emote)
-    hud.linhas(vitais) + células
+    hud.linhas(vitais) + células + painel.linhas(log)
   tela.mostrar(células, rodapé)   descarta se idêntico ao anterior
 ```
 

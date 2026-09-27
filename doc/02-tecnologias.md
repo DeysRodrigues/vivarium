@@ -9,6 +9,7 @@
 | `dataclasses` | `Stat`, `Pose` | semântica de valor, `slots`, `frozen`, `__repr__` |
 | `time.monotonic` | `core/relogio.py` | monotônico, imune a ajuste de relógio do sistema |
 | `random` | ritmos e escolha de pose | jitter de intervalo e sorteio de pose |
+| `termios`, `tty`, `select` | `core/teclado.py` | tecla sem bloquear, sem tomar a tela |
 
 Previsto para fases seguintes: `importlib` e `os.stat` para recarga de
 plugins, `json` e `pathlib` para persistência.
@@ -46,9 +47,15 @@ atualizar por conta própria criaria dois relógios concorrentes.
 
 ## Entrada de teclado
 
-Pendente. Rich não lê teclado. As opções são `termios`/`tty` em modo raw sobre
-`stdin` não bloqueante, ou `curses` restrito à camada de entrada. Bloqueia as
-ações do jogador.
+`termios`/`tty` em modo cbreak sobre `stdin`, lido com `select` sem bloquear
+(`core/teclado.py`). Rich não lê teclado, e `curses` tomaria a tela inteira, o
+que brigaria com o `Live`.
+
+`cbreak` e não `raw`: preserva `ISIG`, então Ctrl+C continua virando
+`KeyboardInterrupt` e o laço sai pelo caminho que já existia.
+
+Fora de um terminal (pipe, teste, CI) degrada para "nunca há tecla" em vez de
+falhar, o que mantém o laço executável sem tty.
 
 ## Caracteres
 

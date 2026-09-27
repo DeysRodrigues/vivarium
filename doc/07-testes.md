@@ -46,6 +46,10 @@ Três propriedades sustentam isso:
 | `render/tela.py` | baixa | descarte de quadro idêntico |
 | `render/paleta.py` | nenhuma | tabela sem lógica |
 | `app.py` | nenhuma | integração, verificada executando |
+| `core/teclado.py` | média | degradação fora de tty, descarte do buffer |
+| `pet/acoes.py` | alta | espera por ação, tecla sem ação, bicho morto |
+| persistência | alta | ida e volta, save corrompido, ausência, migração ([08](08-persistencia.md#pontos-de-teste)) |
+| API e carregador | alta | registro, esquecer por módulo, isolamento de exceção, disparo único |
 
 ## Padrões de teste
 
@@ -108,6 +112,21 @@ def test_core_e_pet_nao_conhecem_render():
                            capture_output=True, text=True)
     assert saida.stdout == ""
 ```
+
+### Plugin
+
+O plugin é testável sem pasta e sem recarga: o carregador aceita um caminho
+injetado (`tmp_path`), e o registro é um objeto, não um global. Um plugin de teste
+é um arquivo escrito em `tmp_path` no próprio teste.
+
+Os dois casos que um teste sozinho não cobre, e que precisam de par:
+
+```python
+def test_recarregar_nao_duplica_handler(): ...
+def test_recarregar_aplica_a_versao_nova(): ...
+```
+
+O primeiro sem o segundo passa com um carregador que simplesmente não recarrega.
 
 ## Fora de alvo
 
