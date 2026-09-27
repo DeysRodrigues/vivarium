@@ -23,6 +23,10 @@ class Gato:
         self.direcao = DIREITA
         self.vitais = Vitais(relogio)
         self.pose = poses.EM_PE
+        self.idade = 0.0
+        self._emote = ""
+        self._emote_ate = 0
+        self._antes = {}
         self._entrar_na_pose(poses.EM_PE)
 
     # -- pose ---------------------------------------------------------
@@ -50,18 +54,101 @@ class Gato:
 
     # -- o tick -------------------------------------------------------
 
+    def reagir(self, emote, segundos=1.6):
+        """Emote temporário, que se sobrepõe ao da pose.
+
+        É o retorno visível de uma ação do jogador: sem ele, alimentar um bicho
+        de fome cheia não tem efeito nenhum na tela.
+        """
+        self._emote = emote
+        self._emote_ate = self.relogio.quadros(segundos)
+
+    # -- o que o mundo precisa saber -----------------------------------
+
+    def _eventos(self):
+        """Eventos ocorridos neste quadro, por transição de estado.
+
+        Devolvidos em vez de disparados: `pet/` não conhece o registro de
+        plugins, então quem monta o jogo é que emite. Mantém esta camada
+        testável sem registro nenhum.
+
+        Transição e não condição: `fome_vazia` dispara uma vez ao esvaziar, não
+        a cada quadro em que está vazia.
+        """
+        agora = {
+            "fome_vazia": self.vitais.fome.vazio,
+            "tedio_cheio": self.vitais.tedio.cheio,
+            "dormiu": self.pose is poses.DEITADO,
+            "morreu": self.vitais.morto,
+        }
+        saiu = []
+        for nome, ligado in agora.items():
+            if ligado and not self._antes.get(nome):
+                saiu.append(nome)
+        if self._antes.get("dormiu") and not agora["dormiu"]:
+            saiu.append("acordou")
+        self._antes = agora
+        return saiu
+
+    # -- ações, chamáveis por código ou por tecla ----------------------
+
+    def alimentar(self, quanto=30):
+        self.vitais.fome.add(quanto)
+
+    def acariciar(self):
+        self.vitais.tedio.add(-8)
+        # Único ponto que recupera vida. Ver pet/acoes.py.
+        self.vitais.vida.add(10)
+
+    def brincar(self):
+        self.vitais.tedio.add(-25)
+        self.vitais.fome.add(-6)     # brincar dá fome
+
+    @property
+    def fome(self):
+        return self.vitais.fome.valor
+
+    @fome.setter
+    def fome(self, valor):
+        self.vitais.fome.add(valor - self.vitais.fome.valor)
+
+    @property
+    def tedio(self):
+        return self.vitais.tedio.valor
+
+    @tedio.setter
+    def tedio(self, valor):
+        self.vitais.tedio.add(valor - self.vitais.tedio.valor)
+
+    @property
+    def vida(self):
+        return self.vitais.vida.valor
+
+    @vida.setter
+    def vida(self, valor):
+        self.vitais.vida.add(valor - self.vitais.vida.valor)
+
+    @property
+    def especie(self):
+        return "gato"
+
     def atualizar(self):
-        """Avança um quadro."""
+        """Avança um quadro. Devolve os eventos ocorridos."""
+        self.idade += self.relogio.dt
         self.vitais.atualizar(self.pose)
+        # Antes da troca de pose, que sai da função mais abaixo.
+        if self._emote_ate > 0:
+            self._emote_ate -= 1
 
         self.ate_trocar -= 1
         if self.ate_trocar <= 0:
             self._escolher_pose()
-            return
+            return self._eventos()
 
         self.mov = {nome: r.atualizar() for nome, r in self.ritmos.items()}
         if self.pose.velocidade:
             self._andar()
+        return self._eventos()
 
     def _andar(self):
         # Velocidade em pixels por segundo: deslocamento é contínuo. A
@@ -83,8 +170,17 @@ class Gato:
         return round(self.x)
 
     def emote(self):
-        """`(texto, coluna, linha)` a sobrepor, ou None."""
-        if not self.pose.emote:
+        """`(texto, coluna, linha)` a sobrepor, ou None.
+
+        A reação a uma ação tem precedência sobre o emote da pose: o bicho
+        dormindo que recebe carinho mostra o coração, não o `zZ`.
+        """
+        texto = self._emote if self._emote_ate > 0 else self.pose.emote
+        if not texto:
             return None
-        sobe = max(0, 1 + self.mov["respirar"])
-        return self.pose.emote, self.coluna + arte.LARGURA // 2, sobe
+        # Célula imediatamente acima do topo do corpo. Ancorar no corpo e não
+        # em linha fixa é o que mantém o emote fora do bicho em qualquer pose:
+        # deitado o corpo desce uma célula e o emote acompanha.
+        dy = self.pose.deslocar + self.mov["respirar"]
+        linha = max(0, (arte.TOPO + dy) // 2 - 1)
+        return texto, self.coluna + arte.LARGURA // 2, linha
