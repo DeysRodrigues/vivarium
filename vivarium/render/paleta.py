@@ -36,6 +36,15 @@ def cor_da_barra(pct, alto_e_bom=True):
         return BARRA_MEDIA
     return BARRA_RUIM
 
+# Emote é caractere, não pixel. O domínio nomeia o emote e a cor é resolvida
+# aqui, como todas as outras.
+_POR_EMOTE = {"♥": CORACAO, "zZ": ROTULO}
+
+
+def cor_do_emote(texto):
+    return _POR_EMOTE.get(texto, DETALHE)
+
+
 _POR_PIXEL = {"#": CORPO, "o": DETALHE}
 
 
